@@ -249,6 +249,9 @@ script_location = tracim_backend/migration
 # are written from script.py.mako
 # output_encoding = utf-8
 
+# SQLAlchemy database url examples:
+# - posgresql -> postgresql://user:password@host:port/databasename
+# - mysql -> mysql+mysqldb://user:password@host:port/databasename
 sqlalchemy.url = sqlite:///%(here)s/tracim.sqlite
 
 ###
