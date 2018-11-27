@@ -47,13 +47,18 @@ and [Backend setting file doc](backend/doc/setting.md).
 
 ## Install frontend: Automated Script for easy setup ##
 
+Run the following commands as a sudoer:
+
     ./install_frontend_dependencies.sh
     ./build_full_frontend.sh
 
-This script use command with sudo, make sure you have installed and configured sudo.
-You can run also with root if you add root in parameter of this script.
+Or as root:
+
+    ./install_frontend_dependencies.sh root
+    ./build_full_frontend.sh
   
-You can add "-d" to build_full_frontend.sh to disabled obfuscation and reduce build time. 
+Note: You can add "-d" to build_full_frontend.sh reduce build time. This
+will disable obfuscation and minification.
 
 ## Running Tracim using pserve ##
 
