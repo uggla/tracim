@@ -25,14 +25,14 @@ from sqlalchemy.orm.exc import NoResultFound
 from sqlalchemy.orm.session import Session
 from sqlalchemy.sql.elements import and_
 
-from tracim_backend.app_models.contents import content_status_list
-from tracim_backend.app_models.contents import content_type_list
 from tracim_backend.app_models.contents import FOLDER_TYPE
 from tracim_backend.app_models.contents import ContentStatus
 from tracim_backend.app_models.contents import ContentType
 from tracim_backend.app_models.contents import GlobalStatus
-from tracim_backend.exceptions import ContentInNotEditableState
+from tracim_backend.app_models.contents import content_status_list
+from tracim_backend.app_models.contents import content_type_list
 from tracim_backend.exceptions import ContentFilenameAlreadyUsedInFolder
+from tracim_backend.exceptions import ContentInNotEditableState
 from tracim_backend.exceptions import ContentNotFound
 from tracim_backend.exceptions import ContentTypeNotExist
 from tracim_backend.exceptions import EmptyCommentContentNotAllowed
@@ -40,6 +40,8 @@ from tracim_backend.exceptions import EmptyLabelNotAllowed
 from tracim_backend.exceptions import PageOfPreviewNotFound
 from tracim_backend.exceptions import PreviewDimNotAllowed
 from tracim_backend.exceptions import RevisionDoesNotMatchThisContent
+from tracim_backend.exceptions import \
+    RevisionFilePathSearchFailedDepotCorrupted
 from tracim_backend.exceptions import SameValueError
 from tracim_backend.exceptions import TracimUnavailablePreviewType
 from tracim_backend.exceptions import UnallowedSubContent
@@ -724,11 +726,18 @@ class ContentApi(object):
         :param revision_id: The revision id of the filepath we want to return
         :return: The corresponding filepath
         """
-        revision = self.get_one_revision(revision_id)
-        depot = DepotManager.get()
-        depot_stored_file = depot.get(revision.depot_file)  # type: StoredFile
-        depot_file_path = depot_stored_file._file_path  # type: str
-        return depot_file_path
+        try:
+            revision = self.get_one_revision(revision_id)
+            depot = DepotManager.get()
+            depot_stored_file = depot.get(revision.depot_file)  # type: StoredFile
+            depot_file_path = depot_stored_file._file_path  # type: str
+            return depot_file_path
+        except IOError as exc:
+            raise RevisionFilePathSearchFailedDepotCorrupted(
+                'IOError Unable to find Revision filepath.'
+                'File may be not available.'
+            ) from exc
+
 
     # TODO - G.M - 2018-09-04 - [Cleanup] Is this method already needed ?
     def get_one_by_label_and_parent(
@@ -941,8 +950,8 @@ class ContentApi(object):
         :param file_extension: file extension of the file
         :return: preview_path as string
         """
-        file_path = self.get_one_revision_filepath(revision_id)
         try:
+            file_path = self.get_one_revision_filepath(revision_id)
             page_number = preview_manager_page_format(page_number)
             if page_number >= self.preview_manager.get_page_nb(file_path, file_ext=file_extension):  # nopep8
                 raise PageOfPreviewNotFound(
@@ -966,6 +975,15 @@ class ContentApi(object):
             raise UnavailablePreview(
                 'No preview available for content {}, revision {}'.format(content_id, revision_id)  # nopep8
             ) from exc
+        except RevisionFilePathSearchFailedDepotCorrupted as exc:
+            logger.warning(
+                self,
+                "Unable to get revision filepath, depot is corrupted: {}".format(str(exc))
+            )
+            logger.warning(self, traceback.format_exc())
+            raise UnavailablePreview(
+                'No preview available for content {}, revision {}'.format(content_id, revision_id)  # nopep8
+            ) from exc
         except Exception as exc:
             logger.warning(
                 self,
@@ -984,14 +1002,23 @@ class ContentApi(object):
                 :param file_extension: file extension of the file
         :return: path of the full pdf preview of this revision
         """
-        file_path = self.get_one_revision_filepath(revision_id)
         try:
+            file_path = self.get_one_revision_filepath(revision_id)
             pdf_preview_path = self.preview_manager.get_pdf_preview(file_path, file_ext=file_extension)  # nopep8
         except UnavailablePreviewType as exc:
             raise TracimUnavailablePreviewType() from exc
         except UnsupportedMimeType as exc:
             raise UnavailablePreview(
                 'No preview available for revision {}'.format(revision_id)
+            ) from exc
+        except RevisionFilePathSearchFailedDepotCorrupted as exc:
+            logger.warning(
+                self,
+                "Unable to get revision filepath, depot is corrupted: {}".format(str(exc))
+            )
+            logger.warning(self, traceback.format_exc())
+            raise UnavailablePreview(
+                'No preview available for revision {}'.format(revision_id)  # nopep8
             ) from exc
         except Exception as exc:
             logger.warning(
@@ -1033,8 +1060,8 @@ class ContentApi(object):
         :param height: height in pixel
         :return: preview_path as string
         """
-        file_path = self.get_one_revision_filepath(revision_id)
         try:
+            file_path = self.get_one_revision_filepath(revision_id)
             page_number = preview_manager_page_format(page_number)
             if page_number >= self.preview_manager.get_page_nb(file_path, file_ext=file_extension):  # nopep8
                 raise PageOfPreviewNotFound(
@@ -1076,6 +1103,15 @@ class ContentApi(object):
             raise UnavailablePreview(
                 'No preview available for content {}, revision {}'.format(content_id, revision_id)  # nopep8
             ) from exc
+        except RevisionFilePathSearchFailedDepotCorrupted as exc:
+            logger.warning(
+                self,
+                "Unable to get revision filepath, depot is corrupted: {}".format(str(exc))
+            )
+            logger.warning(self, traceback.format_exc())
+            raise UnavailablePreview(
+                'No preview available for content {}, revision {}'.format(content_id, revision_id)  # nopep8
+            ) from exc
         except Exception as exc:
             logger.warning(
                 self,
@@ -1089,26 +1125,44 @@ class ContentApi(object):
 
     def _get_all_query(
         self,
-        parent_id: int = None,
+        parent_ids: typing.List[int] = None,
         content_type_slug: str = content_type_list.Any_SLUG,
         workspace: Workspace = None,
-        label:str = None,
+        label: str = None,
         order_by_properties: typing.Optional[typing.List[typing.Union[str, QueryableAttribute]]] = None,  # nopep8
+        complete_path_to_id: int = None,
     ) -> Query:
         """
         Extended filter for better "get all data" query
-        :param parent_id: filter by parent_id
+        :param parent_ids: filter by parent_ids
         :param content_type_slug: filter by content_type slug
         :param workspace: filter by workspace
+        :param complete_path_to_id: add all parent(root included) of content_id
+        given there to parent_ids filter.
         :param order_by_properties: filter by properties can be both string of
         attribute or attribute of Model object from sqlalchemy(preferred way,
         QueryableAttribute object)
         :return: Query object
         """
         order_by_properties = order_by_properties or []  # FDV
-        assert parent_id is None or isinstance(parent_id, int)
+        assert not parent_ids or isinstance(parent_ids, list)
         assert content_type_slug is not None
+        assert not complete_path_to_id or isinstance(complete_path_to_id, int)
         resultset = self._base_query(workspace)
+
+        # INFO - G.M - 2018-11-12 - Get list of all ancestror
+        #  of content, workspace root included
+        if complete_path_to_id:
+            content = self.get_one(complete_path_to_id, content_type_list.Any_SLUG)
+            if content.parent_id:
+                content = content.parent
+                while content.parent_id:
+                    parent_ids.append(content.content_id)
+                    content = content.parent
+                parent_ids.append(content.content_id)
+            # TODO - G.M - 2018-11-12 - add workspace root to
+            # parent_ids list when complete_path_to_id is set
+            parent_ids.append(0)
 
         if content_type_slug != content_type_list.Any_SLUG:
             # INFO - G.M - 2018-07-05 - convert with
@@ -1119,10 +1173,23 @@ class ContentApi(object):
                 all_slug_alias.extend(content_type_object.slug_alias)
             resultset = resultset.filter(Content.type.in_(all_slug_alias))
 
-        if parent_id:
-            resultset = resultset.filter(Content.parent_id==parent_id)
-        if parent_id == 0 or parent_id is False:
+        if parent_ids is False:
             resultset = resultset.filter(Content.parent_id == None)
+
+        if parent_ids:
+            # TODO - G.M - 2018-11-09 - Adapt list in order to deal with root
+            # case properly
+            allowed_parent_ids = []
+            allow_root = False
+            for parent_id in parent_ids:
+                if parent_id == 0:
+                    allow_root = True
+                else:
+                    allowed_parent_ids.append(parent_id)
+            if allow_root:
+                resultset = resultset.filter(or_(Content.parent_id.in_(allowed_parent_ids), Content.parent_id == None))  # nopep8
+            else:
+                resultset = resultset.filter(Content.parent_id.in_(allowed_parent_ids))  # nopep8
         if label:
             resultset = resultset.filter(Content.label.ilike('%{}%'.format(label)))  # nopep8
 
@@ -1133,15 +1200,18 @@ class ContentApi(object):
 
     def get_all(
             self,
-            parent_id: int=None,
+            parent_ids: typing.List[int]=None,
             content_type: str=content_type_list.Any_SLUG,
             workspace: Workspace=None,
             label: str=None,
             order_by_properties: typing.Optional[typing.List[typing.Union[str, QueryableAttribute]]] = None,  # nopep8
+            complete_path_to_id: int = None,
     ) -> typing.List[Content]:
         """
         Return all content using some filters
-        :param parent_id: filter by parent_id
+        :param parent_ids: filter by parent_id
+        :param complete_path_to_id: filter by path of content_id
+        (add all parent, root included to parent_ids filter)
         :param content_type: filter by content_type slug
         :param workspace: filter by workspace
         :param order_by_properties: filter by properties can be both string of
@@ -1150,7 +1220,7 @@ class ContentApi(object):
         :return: List of contents
         """
         order_by_properties = order_by_properties or []  # FDV
-        return self._get_all_query(parent_id, content_type, workspace, label, order_by_properties).all()
+        return self._get_all_query(parent_ids, content_type, workspace, label, order_by_properties, complete_path_to_id).all()
 
     # TODO - G.M - 2018-07-17 - [Cleanup] Drop this method if unneeded
     # def get_children(self, parent_id: int, content_types: list, workspace: Workspace=None) -> typing.List[Content]:
@@ -1355,7 +1425,7 @@ class ContentApi(object):
     #
     #     return result
 
-    def _set_allowed_content(self, content: Content, allowed_content_dict: dict) -> None:  # nopep8
+    def _set_allowed_content(self, content: Content, allowed_content_dict: dict) -> Content:  # nopep8
         """
         :param content: the given content instance
         :param allowed_content_dict: must be something like this:
@@ -1365,13 +1435,16 @@ class ContentApi(object):
                 file = False,
                 page = True
             )
-        :return: nothing
+        :return: content
         """
         properties = content.properties.copy()
+        if set(properties['allowed_content']) == set(allowed_content_dict) :
+            raise SameValueError('Content allowed content did not change')
         properties['allowed_content'] = allowed_content_dict
         content.properties = properties
+        return content
 
-    def set_allowed_content(self, content: Content, allowed_content_type_slug_list: typing.List[str]) -> None:  # nopep8
+    def set_allowed_content(self, content: Content, allowed_content_type_slug_list: typing.List[str]) -> Content:  # nopep8
         """
         :param content: the given content instance
         :param allowed_content_type_slug_list: list of content_type_slug to
@@ -1384,7 +1457,7 @@ class ContentApi(object):
                 raise ContentTypeNotExist('Content_type {} does not exist'.format(allowed_content_type_slug))  # nopep8
             allowed_content_dict[allowed_content_type_slug] = True
 
-        self._set_allowed_content(content, allowed_content_dict)
+        return self._set_allowed_content(content, allowed_content_dict)
 
     def restore_content_default_allowed_content(self, content: Content) -> None:
         """
@@ -1506,13 +1579,48 @@ class ContentApi(object):
                and item.is_active \
                and item.get_status().is_editable()
 
-    def update_content(self, item: Content, new_label: str, new_content: str=None) -> Content:
+    def update_container_content(
+            self,
+            item: Content,
+            allowed_content_type_slug_list: typing.List[str],
+            new_label: str,
+            new_content: str=None,
+    ):
+        """
+        Update a container content like folder
+        :param item: content
+        :param item: content
+        :param new_label: new label of content
+        :param new_content: new raw text content/description of content
+        :param allowed_content_type_slug_list: list of allowed subcontent type
+         of content.
+        :return:
+        """
+        try:
+            item = self.set_allowed_content(item, allowed_content_type_slug_list)
+            content_has_changed = True
+        except SameValueError:
+            content_has_changed = False
+        item = self.update_content(item, new_label, new_content, force_update=content_has_changed)
+
+        return item
+
+    def update_content(self, item: Content, new_label: str, new_content: str=None, force_update=False) -> Content:
+        """
+        Update a content
+        :param item: content
+        :param new_label: new label of content
+        :param new_content: new raw text content/description of content
+        :param force_update: don't raise SameValueError if value does not change
+        :return: updated content
+        """
         if not self.is_editable(item):
             raise ContentInNotEditableState("Can't update not editable file, you need to change his status or state (deleted/archived) before any change.")  # nopep8
-        if item.label == new_label and item.description == new_content:
-            # TODO - G.M - 20-03-2018 - Fix internatization for webdav access.
-            # Internatization disabled in libcontent for now.
-            raise SameValueError('The content did not changed')
+        if not force_update:
+            if item.label == new_label and item.description == new_content:
+                # TODO - G.M - 20-03-2018 - Fix internatization for webdav access.
+                # Internatization disabled in libcontent for now.
+                raise SameValueError('The content did not changed')
         if not new_label:
             raise EmptyLabelNotAllowed()
 
@@ -1613,13 +1721,20 @@ class ContentApi(object):
         content.revision_type = ActionDescription.UNDELETION
 
     def get_preview_page_nb(self, revision_id: int, file_extension: str) -> typing.Optional[int]:  # nopep8
-        file_path = self.get_one_revision_filepath(revision_id)
         try:
+            file_path = self.get_one_revision_filepath(revision_id)
             nb_pages = self.preview_manager.get_page_nb(
                 file_path,
                 file_ext=file_extension
             )
         except UnsupportedMimeType:
+            return None
+        except RevisionFilePathSearchFailedDepotCorrupted as exc:
+            logger.warning(
+                self,
+                "Unable to get revision filepath, depot is corrupted: {}".format(str(exc))
+            )
+            logger.warning(self, traceback.format_exc())
             return None
         except Exception as e:
             logger.warning(
@@ -1631,13 +1746,20 @@ class ContentApi(object):
         return nb_pages
 
     def has_pdf_preview(self, revision_id: int, file_extension: str) -> bool:
-        file_path = self.get_one_revision_filepath(revision_id)
         try:
+            file_path = self.get_one_revision_filepath(revision_id)
             return self.preview_manager.has_pdf_preview(
                 file_path,
                 file_ext=file_extension
             )
         except UnsupportedMimeType:
+            return False
+        except RevisionFilePathSearchFailedDepotCorrupted as exc:
+            logger.warning(
+                self,
+                "Unable to get revision filepath, depot is corrupted: {}".format(str(exc))
+            )
+            logger.warning(self, traceback.format_exc())
             return False
         except Exception as e:
             logger.warning(
@@ -1648,13 +1770,20 @@ class ContentApi(object):
             return False
 
     def has_jpeg_preview(self, revision_id: int, file_extension: str) -> bool:
-        file_path = self.get_one_revision_filepath(revision_id)
         try:
+            file_path = self.get_one_revision_filepath(revision_id)
             return self.preview_manager.has_jpeg_preview(
                 file_path,
                 file_ext=file_extension
             )
         except UnsupportedMimeType:
+            return False
+        except RevisionFilePathSearchFailedDepotCorrupted as exc:
+            logger.warning(
+                self,
+                "Unable to get revision filepath, depot is corrupted: {}".format(str(exc))
+            )
+            logger.warning(self, traceback.format_exc())
             return False
         except Exception as e:
             logger.warning(
