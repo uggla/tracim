@@ -1,13 +1,27 @@
 # coding: utf-8
+import marshmallow as marshmallow
+from hapic import HapicData
 from pyramid.config import Configurator
 from pyramid.response import Response
 from tracim_backend.extensions import hapic
 from tracim_backend.exceptions import NotAuthorized
 from tracim_backend.exceptions import NotAuthenticated
+from tracim_backend.lib.calendar.radicale import RadicaleApi
 from tracim_backend.lib.proxy.proxy import Proxy
-from tracim_backend.lib.utils.authorization import check_user_calendar_authorization
+from tracim_backend.lib.utils.authorization import check_right, \
+    is_user, can_see_workspace_information
 from tracim_backend.lib.utils.request import TracimRequest
 from tracim_backend.views.controllers import Controller
+
+
+# FIXME BS 2018-12-06: Move
+class UserCalendarPath(marshmallow.Schema):
+    user_id = marshmallow.fields.String(required=True)
+
+
+# FIXME BS 2018-12-06: Move
+class WorkspaceCalendarPath(marshmallow.Schema):
+    workspace_id = marshmallow.fields.String(required=True)
 
 
 class RadicaleProxyController(Controller):
@@ -17,44 +31,54 @@ class RadicaleProxyController(Controller):
             base_address='http://127.0.0.1:4321',
         )
 
-    # FIXME BS 2018-11-29: enable doc
+    # FIXME BS 2018-11-29: can't make api doc because no method specified
+    # We must set all methods if we want doc
     # @hapic.with_api_doc()
     @hapic.handle_exception(NotAuthenticated, http_code=401)
     @hapic.handle_exception(NotAuthorized, http_code=403)
-    def radicale_proxy__user(self, context, request: TracimRequest):
-        user_id = int(request.matchdict['user_id'])
-
-        try:
-            check_user_calendar_authorization(request, user_id)
-        # TODO BS 2018-12-04: managed in decorators ?
-        except NotAuthenticated:
-            return Response(
-                status=401,
-                headerlist=[
-                    ('WWW-Authenticate', 'Basic realm="Tracim credentials"'),
-                ]
-            )
-
-        return self._proxy.get_response_for_request(
-            request,
-            '/user/{}.ics'.format(
-                str(user_id),
-            ),
-            extra_headers={
-                # NOTE BS 2018-12-04: Radicale must be configured with "http_x_remote_user" as
-                # auth type config value.
-                'X-Remote-User': request.current_user.user_id,
-            }
+    @check_right(is_user)
+    @hapic.input_path(UserCalendarPath)
+    def radicale_proxy__user(
+        self, context, request: TracimRequest, hapic_data: HapicData,
+    ) -> Response:
+        radicale_api = RadicaleApi(
+            config=request.registry.settings['CFG'],
+            current_user=request.current_user,
+            session=request.dbsession,
+            proxy=self._proxy,
         )
 
-    # FIXME BS 2018-11-29: enable doc
+        radicale_response = radicale_api.get_remote_user_calendar_response(
+            request,
+        )
+        return radicale_response
+
+    # FIXME BS 2018-11-29: can't make api doc because no method specified
+    # We must set all methods if we want doc
     # @hapic.with_api_doc()
     @hapic.handle_exception(NotAuthenticated, http_code=401)
     @hapic.handle_exception(NotAuthorized, http_code=403)
-    def radicale_proxy__workspace(self, context, request: TracimRequest):
-        # FIXME BS 2018-11-26: check authenticated user can make this request
-        # (use new right validation objects)
-        return self._proxy.get_response_for_request(request)
+    @check_right(is_user)
+    @check_right(can_see_workspace_information)
+    # FIXME BS 2018-12-06: We fail here because previous view have not with_api_doc.
+    # So hapic buffer is not clear and input_path raise an error.
+    @hapic.input_path(WorkspaceCalendarPath)
+    def radicale_proxy__workspace(
+        self, context, request: TracimRequest, hapic_data: HapicData,
+    ) -> Response:
+        workspace_id = int(hapic_data.path['user_id'])
+        radicale_api = RadicaleApi(
+            config=request.registry.settings['CFG'],
+            current_user=request.current_user,
+            session=request.dbsession,
+            proxy=self._proxy,
+        )
+
+        radicale_response = radicale_api.get_remote_workspace_calendar_response(
+            request,
+            workspace_id=int(workspace_id),
+        )
+        return radicale_response
 
     def bind(self, configurator: Configurator) -> None:
         """
