@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from pyramid_multiauth import MultiAuthenticationPolicy
+from tracim_backend.lib.calendar.authorization import TracimPyramidContext
 from tracim_backend.views.core_api.account_controller import AccountController
 from tracim_backend.views.radicale_proxy.proxy import RadicaleProxyController
 
@@ -104,7 +105,7 @@ def web(global_config, **local_settings):
     # Add SqlAlchemy DB
     configurator.include('.models')
     # set Hapic
-    context = PyramidContext(
+    context = TracimPyramidContext(
         configurator=configurator,
         default_error_builder=ErrorSchema(),
         debug=app_config.DEBUG,

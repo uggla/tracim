@@ -4,9 +4,11 @@ from hapic import HapicData
 from pyramid.config import Configurator
 from pyramid.response import Response
 from tracim_backend.extensions import hapic
-from tracim_backend.exceptions import NotAuthorized
+from tracim_backend.exceptions import NotAuthorized, InsufficientUserRoleInWorkspace
 from tracim_backend.exceptions import NotAuthenticated
+from tracim_backend.lib.calendar.authorization import RadicaleProxyErrorBuilder
 from tracim_backend.lib.calendar.radicale import RadicaleApi
+from tracim_backend.lib.calendar.determiner import CaldavAuthorizationDeterminer
 from tracim_backend.lib.proxy.proxy import Proxy
 from tracim_backend.lib.utils.authorization import check_right, \
     is_user, can_see_workspace_information
@@ -26,18 +28,21 @@ class WorkspaceCalendarPath(marshmallow.Schema):
 
 class RadicaleProxyController(Controller):
     def __init__(self):
+        self._authorization = CaldavAuthorizationDeterminer()
         self._proxy = Proxy(
             # FIXME BS 2018-11-27: from config
             base_address='http://127.0.0.1:4321',
         )
 
-    # FIXME BS 2018-11-29: can't make api doc because no method specified
-    # We must set all methods if we want doc
-    # @hapic.with_api_doc()
-    @hapic.handle_exception(NotAuthenticated, http_code=401)
+    @hapic.with_api_doc(disable_doc=True)
+    @hapic.handle_exception(
+        NotAuthenticated,
+        http_code=401,
+        error_builder=RadicaleProxyErrorBuilder(),
+    )
     @hapic.handle_exception(NotAuthorized, http_code=403)
     @check_right(is_user)
-    @hapic.input_path(UserCalendarPath)
+    @hapic.input_path(UserCalendarPath())
     def radicale_proxy__user(
         self, context, request: TracimRequest, hapic_data: HapicData,
     ) -> Response:
@@ -46,6 +51,7 @@ class RadicaleProxyController(Controller):
             current_user=request.current_user,
             session=request.dbsession,
             proxy=self._proxy,
+            authorization=self._authorization,
         )
 
         radicale_response = radicale_api.get_remote_user_calendar_response(
@@ -53,25 +59,28 @@ class RadicaleProxyController(Controller):
         )
         return radicale_response
 
-    # FIXME BS 2018-11-29: can't make api doc because no method specified
-    # We must set all methods if we want doc
-    # @hapic.with_api_doc()
-    @hapic.handle_exception(NotAuthenticated, http_code=401)
+    @hapic.with_api_doc(disable_doc=True)
+    @hapic.handle_exception(
+        NotAuthenticated,
+        http_code=401,
+        error_builder=RadicaleProxyErrorBuilder(),
+    )
     @hapic.handle_exception(NotAuthorized, http_code=403)
+    # FIXME BS 2018-12-10: Check it is the raise exception in cas of not workspace write auth
+    @hapic.handle_exception(InsufficientUserRoleInWorkspace, http_code=403)
     @check_right(is_user)
     @check_right(can_see_workspace_information)
-    # FIXME BS 2018-12-06: We fail here because previous view have not with_api_doc.
-    # So hapic buffer is not clear and input_path raise an error.
-    @hapic.input_path(WorkspaceCalendarPath)
+    @hapic.input_path(WorkspaceCalendarPath())
     def radicale_proxy__workspace(
         self, context, request: TracimRequest, hapic_data: HapicData,
     ) -> Response:
-        workspace_id = int(hapic_data.path['user_id'])
+        workspace_id = int(hapic_data.path['workspace_id'])
         radicale_api = RadicaleApi(
             config=request.registry.settings['CFG'],
             current_user=request.current_user,
             session=request.dbsession,
             proxy=self._proxy,
+            authorization=self._authorization,
         )
 
         radicale_response = radicale_api.get_remote_workspace_calendar_response(
