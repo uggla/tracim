@@ -1,5 +1,4 @@
 # coding: utf-8
-import json
 from enum import Enum
 
 from hapic.error import DefaultErrorBuilder
@@ -20,8 +19,7 @@ class TracimPyramidContext(PyramidContext):
 
         # FIXME BS 2018-12-10: This is a hack to be able to add WWW-Authenticate
         try:
-            response_dict = json.loads(response.body)
-            if response_dict['code'] == 4422:
+            if response.json['code'] == 4422:
                 # TODO BS 2018-12-10: Traduce realm
                 response.headerlist.append(('WWW-Authenticate', 'Basic realm="Tracim credentials"'))
                 return response

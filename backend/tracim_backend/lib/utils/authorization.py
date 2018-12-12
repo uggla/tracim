@@ -250,17 +250,17 @@ class CanAccessWorkspaceCalendarChecker(AuthorizationChecker):
 
     def check(
             self,
-            tracim_request: TracimRequest
+            tracim_context: "TracimRequest"
     ) -> bool:
         """
-        :param tracim_request: Must be a TracimRequest because this checker only work in
+        :param tracim_context: Must be a TracimRequest because this checker only work in
         pyramid http request context.
         :return: bool
         """
-        if self._authorization.determine_requested_mode(tracim_request) == DavAuthorization.WRITE:
-            is_contributor.check(tracim_request)
+        if self._authorization.determine_requested_mode(tracim_context) == DavAuthorization.WRITE:
+            is_contributor.check(tracim_context)
         else:
-            is_reader.check(tracim_request)
+            is_reader.check(tracim_context)
 
         return True
 

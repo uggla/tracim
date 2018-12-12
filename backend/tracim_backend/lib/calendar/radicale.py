@@ -40,11 +40,12 @@ class RadicaleApi(object):
             '/user/{}.ics'.format(
                 str(self._user.user_id),
             ),
-            extra_headers={
-                # NOTE BS 2018-12-04: Radicale must be configured with "http_x_remote_user" as
-                # auth type config value.
-                'X-Remote-User': request.current_user.user_id,
-            }
+            # FIXME BS 2018-12-11: Remove code if sure: we don't need because Tracim own rights
+            # extra_headers={
+            #     # NOTE BS 2018-12-04: Radicale must be configured with "http_x_remote_user" as
+            #     # auth type config value.
+            #     'X-Remote-User': request.current_user.user_id,
+            # }
         )
 
     def get_remote_workspace_calendar_response(
@@ -55,9 +56,10 @@ class RadicaleApi(object):
             '/workspace/{}.ics'.format(
                 str(workspace.workspace_id),
             ),
-            extra_headers={
-                # NOTE BS 2018-12-04: Radicale must be configured with "http_x_remote_user" as
-                # auth type config value.
-                'X-Remote-User': request.current_user.user_id,
-            }
+            # FIXME BS 2018-12-11: Remove code if sure: we don't need because Tracim own rights
+            # extra_headers={
+            #     # NOTE BS 2018-12-04: Radicale must be configured with "http_x_remote_user" as
+            #     # auth type config value.
+            #     'X-Remote-User': request.current_user.user_id,
+            # }
         )
