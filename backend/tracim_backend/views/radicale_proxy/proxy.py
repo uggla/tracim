@@ -11,7 +11,7 @@ from tracim_backend.lib.calendar.radicale import RadicaleApi
 from tracim_backend.lib.calendar.determiner import CaldavAuthorizationDeterminer
 from tracim_backend.lib.proxy.proxy import Proxy
 from tracim_backend.lib.utils.authorization import check_right, \
-    is_user, can_see_workspace_information
+    is_user, is_reader, can_access_workspace_calendar
 from tracim_backend.lib.utils.request import TracimRequest
 from tracim_backend.views.controllers import Controller
 
@@ -68,13 +68,11 @@ class RadicaleProxyController(Controller):
     @hapic.handle_exception(NotAuthorized, http_code=403)
     # FIXME BS 2018-12-10: Check it is the raise exception in cas of not workspace write auth
     @hapic.handle_exception(InsufficientUserRoleInWorkspace, http_code=403)
-    @check_right(is_user)
-    @check_right(can_see_workspace_information)
+    @check_right(can_access_workspace_calendar)
     @hapic.input_path(WorkspaceCalendarPath())
     def radicale_proxy__workspace(
         self, context, request: TracimRequest, hapic_data: HapicData,
     ) -> Response:
-        workspace_id = int(hapic_data.path['workspace_id'])
         radicale_api = RadicaleApi(
             config=request.registry.settings['CFG'],
             current_user=request.current_user,
@@ -85,7 +83,7 @@ class RadicaleProxyController(Controller):
 
         radicale_response = radicale_api.get_remote_workspace_calendar_response(
             request,
-            workspace_id=int(workspace_id),
+            workspace=request.current_workspace,
         )
         return radicale_response
 

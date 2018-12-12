@@ -4,6 +4,8 @@ import typing
 from typing import TYPE_CHECKING
 
 from pyramid.interfaces import IAuthorizationPolicy
+from tracim_backend.lib.calendar.authorization import DavAuthorization
+from tracim_backend.lib.calendar.determiner import CaldavAuthorizationDeterminer
 from zope.interface import implementer
 
 from tracim_backend.app_models.contents import content_type_list
@@ -236,6 +238,33 @@ class AndAuthorizationChecker(AuthorizationChecker):
             )
         return True
 
+
+class CanAccessWorkspaceCalendarChecker(AuthorizationChecker):
+    """
+    Check current user hace write access on current workspace:
+        - in reading: must be reader
+        - in writing: must be contributor
+    """
+    def __init__(self) -> None:
+        self._authorization = CaldavAuthorizationDeterminer()
+
+    def check(
+            self,
+            tracim_request: TracimRequest
+    ) -> bool:
+        """
+        :param tracim_request: Must be a TracimRequest because this checker only work in
+        pyramid http request context.
+        :return: bool
+        """
+        if self._authorization.determine_requested_mode(tracim_request) == DavAuthorization.WRITE:
+            is_contributor.check(tracim_request)
+        else:
+            is_reader.check(tracim_request)
+
+        return True
+
+
 # Useful Authorization Checker
 # profile
 is_administrator = ProfileChecker(Group.TIM_ADMIN)
@@ -264,6 +293,7 @@ can_delete_workspace = OrAuthorizationChecker(
     is_administrator,
     AndAuthorizationChecker(is_workspace_manager, is_trusted_user)
 )
+can_access_workspace_calendar = CanAccessWorkspaceCalendarChecker()
 # content
 can_move_content = AndAuthorizationChecker(
     is_content_manager,
