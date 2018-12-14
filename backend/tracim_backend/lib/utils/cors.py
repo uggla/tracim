@@ -6,6 +6,7 @@
 import typing
 
 from pyramid.events import NewResponse
+from tracim_backend.lib.calendar.determiner import CALDAV_WRITE_METHODS, CALDAV_READ_METHODS
 
 
 def add_cors_support(config):
@@ -59,6 +60,13 @@ def cors_options_view(context, request):
     # @TODO Côme - 2018/09/04 - I commented the test bellow because I can't work with for editing a file in app file.
     # I checked with GM and this test might require some fixes
     # if 'Access-Control-Request-Headers' in request.headers:
+    # response.headers['Access-Control-Allow-Methods'] = (
+    #     ','.join(
+    #         ['OPTIONS,HEAD,GET,POST,PUT,DELETE'] +
+    #         CALDAV_WRITE_METHODS +
+    #         CALDAV_READ_METHODS
+    #     )
+    # )
     response.headers['Access-Control-Allow-Methods'] = (
         'OPTIONS,HEAD,GET,POST,PUT,DELETE'
     )
