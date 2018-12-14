@@ -5,6 +5,7 @@ from urllib.parse import urljoin
 
 import requests
 from pyramid.response import Response
+from tracim_backend.lib.utils.cors import get_cors_headers_to_add
 from tracim_backend.lib.utils.request import TracimRequest
 
 
@@ -42,6 +43,12 @@ class Proxy(object):
             if (header_name.lower(), header_value.lower()) not in drop_headers\
                     and header_name.lower() not in drop_headers.keys():
                 headers.append((header_name, header_value))
+
+        # FIXME BS 2018-12-14: apply cors by default behaviour
+        origin = request.headers.get('Origin')
+        if origin:
+            cors_headers = get_cors_headers_to_add(origin)
+            headers.extend(cors_headers.items())
 
         return Response(
             status=behind_response.status_code,
