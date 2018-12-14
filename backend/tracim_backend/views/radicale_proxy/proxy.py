@@ -150,6 +150,7 @@ class RadicaleProxyController(Controller):
         )
         configurator.add_route(
             'radicale_proxy__users',
+            # FIXME BS 2018-12-13: Last "/" must be optional
             '/radicale/user/',
         )
         configurator.add_view(
@@ -168,6 +169,7 @@ class RadicaleProxyController(Controller):
         )
         configurator.add_route(
             'radicale_proxy__workspaces',
+            # FIXME BS 2018-12-13: Last "/" must be optional
             '/radicale/workspace/',
         )
         configurator.add_view(
