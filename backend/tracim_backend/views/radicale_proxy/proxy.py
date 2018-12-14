@@ -65,6 +65,29 @@ class RadicaleProxyController(Controller):
         http_code=401,
         error_builder=RadicaleProxyErrorBuilder(),
     )
+    @check_right(is_user)
+    def radicale_proxy__users(
+        self, context, request: TracimRequest,
+    ) -> Response:
+        radicale_api = RadicaleApi(
+            config=request.registry.settings['CFG'],
+            current_user=request.current_user,
+            session=request.dbsession,
+            proxy=self._proxy,
+            authorization=self._authorization,
+        )
+
+        radicale_response = radicale_api.get_remote_user_calendars_response(
+            request,
+        )
+        return radicale_response
+
+    @hapic.with_api_doc(disable_doc=True)
+    @hapic.handle_exception(
+        NotAuthenticated,
+        http_code=401,
+        error_builder=RadicaleProxyErrorBuilder(),
+    )
     @hapic.handle_exception(NotAuthorized, http_code=403)
     # FIXME BS 2018-12-10: Check it is the raise exception in cas of not workspace write auth
     @hapic.handle_exception(InsufficientUserRoleInWorkspace, http_code=403)
@@ -87,6 +110,30 @@ class RadicaleProxyController(Controller):
         )
         return radicale_response
 
+    @hapic.with_api_doc(disable_doc=True)
+    @hapic.handle_exception(
+        NotAuthenticated,
+        http_code=401,
+        error_builder=RadicaleProxyErrorBuilder(),
+    )
+    @hapic.handle_exception(NotAuthorized, http_code=403)
+    def radicale_proxy__workspaces(
+        self, context, request: TracimRequest,
+    ) -> Response:
+        radicale_api = RadicaleApi(
+            config=request.registry.settings['CFG'],
+            current_user=request.current_user,
+            session=request.dbsession,
+            proxy=self._proxy,
+            authorization=self._authorization,
+        )
+
+        radicale_response = radicale_api.get_remote_workspace_calendars_response(
+            request,
+            workspace=request.current_workspace,
+        )
+        return radicale_response
+
     def bind(self, configurator: Configurator) -> None:
         """
         Create all routes and views using pyramid configurator
@@ -101,6 +148,14 @@ class RadicaleProxyController(Controller):
             self.radicale_proxy__user,
             route_name='radicale_proxy__user',
         )
+        configurator.add_route(
+            'radicale_proxy__users',
+            '/radicale/user/',
+        )
+        configurator.add_view(
+            self.radicale_proxy__users,
+            route_name='radicale_proxy__users',
+        )
 
         # Radicale workspace calendar
         configurator.add_route(
@@ -110,4 +165,12 @@ class RadicaleProxyController(Controller):
         configurator.add_view(
             self.radicale_proxy__workspace,
             route_name='radicale_proxy__workspace',
+        )
+        configurator.add_route(
+            'radicale_proxy__workspaces',
+            '/radicale/workspace/',
+        )
+        configurator.add_view(
+            self.radicale_proxy__workspaces,
+            route_name='radicale_proxy__workspaces',
         )
