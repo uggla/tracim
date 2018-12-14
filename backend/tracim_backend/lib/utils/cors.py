@@ -3,6 +3,8 @@
 # original code from https://gist.github.com/mmerickel/1afaf64154b335b596e4
 # see also
 # here : https://groups.google.com/forum/#!topic/pylons-discuss/2Sw4OkOnZcE
+import typing
+
 from pyramid.events import NewResponse
 
 
@@ -72,9 +74,16 @@ def add_cors_to_response(event):
     response = event.response
     app_config = request.registry.settings['CFG']
     if 'Origin' in request.headers and request.headers['Origin'] in app_config.CORS_ALLOWED_ORIGIN:  # nopep8
-        response.headers['Access-Control-Expose-Headers'] = (
+        headers_to_add = get_cors_headers_to_add(origin=request.headers['Origin'])
+        response.headers.update(headers_to_add)
+
+
+def get_cors_headers_to_add(origin: str) -> typing.Dict[str, str]:
+    return {
+        'Access-Control-Expose-Headers': (
             'Content-Type,Date,Content-Length,Authorization,X-Request-ID'
-        )
-        response.headers['Access-Control-Allow-Origin'] = request.headers['Origin']  # nopep8
-        response.headers['Access-Control-Allow-Credentials'] = 'true'
-        response.headers['Vary'] = 'Origin'
+        ),
+        'Access-Control-Allow-Origin': origin,
+        'Access-Control-Allow-Credentials': 'true',
+        'Vary': 'Origin'
+    }

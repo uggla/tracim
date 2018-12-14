@@ -4,12 +4,15 @@ import typing
 from typing import TYPE_CHECKING
 
 from pyramid.interfaces import IAuthorizationPolicy
+from tracim_backend.lib.calendar.authorization import DavAuthorization
+from tracim_backend.lib.calendar.determiner import CaldavAuthorizationDeterminer
 from zope.interface import implementer
 
 from tracim_backend.app_models.contents import ContentTypeList
 from tracim_backend.app_models.contents import content_type_list
 from tracim_backend.exceptions import ContentTypeNotAllowed
 from tracim_backend.exceptions import TracimException
+from tracim_backend.exceptions import ContentTypeNotAllowed, NotAuthorized
 from tracim_backend.exceptions import InsufficientUserProfile
 from tracim_backend.exceptions import InsufficientUserRoleInWorkspace
 from tracim_backend.exceptions import UserGivenIsNotTheSameAsAuthenticated
@@ -272,6 +275,33 @@ class AndAuthorizationChecker(AuthorizationChecker):
             )
         return True
 
+
+class CanAccessWorkspaceCalendarChecker(AuthorizationChecker):
+    """
+    Check current user hace write access on current workspace:
+        - in reading: must be reader
+        - in writing: must be contributor
+    """
+    def __init__(self) -> None:
+        self._authorization = CaldavAuthorizationDeterminer()
+
+    def check(
+            self,
+            tracim_context: "TracimRequest"
+    ) -> bool:
+        """
+        :param tracim_context: Must be a TracimRequest because this checker only work in
+        pyramid http request context.
+        :return: bool
+        """
+        if self._authorization.determine_requested_mode(tracim_context) == DavAuthorization.WRITE:
+            is_contributor.check(tracim_context)
+        else:
+            is_reader.check(tracim_context)
+
+        return True
+
+
 # Useful Authorization Checker
 # profile
 is_administrator = ProfileChecker(Group.TIM_ADMIN)
@@ -300,6 +330,7 @@ can_delete_workspace = OrAuthorizationChecker(
     is_administrator,
     AndAuthorizationChecker(is_workspace_manager, is_trusted_user)
 )
+can_access_workspace_calendar = CanAccessWorkspaceCalendarChecker()
 # content
 can_move_content = AndAuthorizationChecker(
     is_content_manager,
@@ -332,3 +363,19 @@ def check_right(authorization_checker: AuthorizationChecker):
             return func(self, context, request)
         return wrapper
     return decorator
+
+
+def check_user_calendar_authorization(
+    request: 'TracimRequest',
+    user_id: int,
+) -> None:
+    """
+    Raise NotAuthenticated if user not authenticated and raise
+    NotAuthorized if given calendar user id not allowed
+    """
+    # Note: raise NotAuthenticated if user not authenticated
+    if request.current_user.user_id != user_id:
+        raise NotAuthorized(
+            'Current user is not allowed to access "{}.ics"'
+            ' user calendar'.format(str(user_id)),
+        )
