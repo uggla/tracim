@@ -69,3 +69,4 @@ sessions_lock/
 .mypy_cache/
 
 backend.json
+radicale.ini
