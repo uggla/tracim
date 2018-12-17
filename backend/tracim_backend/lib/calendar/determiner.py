@@ -8,7 +8,7 @@ if typing.TYPE_CHECKING:
     from tracim_backend import TracimRequest
 
 
-CALDAV_READ_METHODS = (
+CALDAV_READ_METHODS = [
     'GET',
     'HEAD',
     'OPTIONS',
@@ -16,8 +16,8 @@ CALDAV_READ_METHODS = (
     'LOCK',
     'UNLOCK',
     'REPORT',
-)
-CALDAV_WRITE_METHODS = (
+]
+CALDAV_WRITE_METHODS = [
     'PUT',
     'DELETE',
     'POST',
@@ -26,7 +26,7 @@ CALDAV_WRITE_METHODS = (
     'MOVE',
     'MKCOL',
     'MKCALENDAR',
-)
+]
 
 
 class CaldavAuthorizationDeterminer(object):

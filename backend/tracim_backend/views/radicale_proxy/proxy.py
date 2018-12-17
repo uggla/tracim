@@ -139,17 +139,47 @@ class RadicaleProxyController(Controller):
         Create all routes and views using pyramid configurator
         for this controller
         """
+        # FIXME BS 2018-12-17: c le bazar dans les paths
         # Radicale user calendar
         configurator.add_route(
             'radicale_proxy__user',
             '/radicale/user/{user_id:[0-9]+}.ics',
         )
+        configurator.add_route(
+            'radicale_proxy__user__leading_slash',
+            '/radicale/user/{user_id:[0-9]+}.ics/',
+        )
+        configurator.add_route(
+            'radicale_proxy__user_x',
+            '/radicale/user/{user_id:[0-9]+}.ics/{what_is_it_id:[a-zA-Z0-9]+}.ics',
+        )
+        configurator.add_route(
+            'radicale_proxy__user_x__leading_slash',
+            '/radicale/user/{user_id:[0-9]+}.ics/{what_is_it_id:[a-zA-Z0-9]+}.ics/',
+        )
         configurator.add_view(
             self.radicale_proxy__user,
             route_name='radicale_proxy__user',
         )
+        configurator.add_view(
+            self.radicale_proxy__user,
+            route_name='radicale_proxy__user__leading_slash',
+        )
+        configurator.add_view(
+            self.radicale_proxy__user,
+            route_name='radicale_proxy__user_x',
+        )
+        configurator.add_view(
+            self.radicale_proxy__user,
+            route_name='radicale_proxy__user_x__leading_slash',
+        )
         configurator.add_route(
             'radicale_proxy__users',
+            # FIXME BS 2018-12-13: Last "/" must be optional
+            '/radicale/user',
+        )
+        configurator.add_route(
+            'radicale_proxy__users__leading_slash',
             # FIXME BS 2018-12-13: Last "/" must be optional
             '/radicale/user/',
         )
@@ -157,22 +187,59 @@ class RadicaleProxyController(Controller):
             self.radicale_proxy__users,
             route_name='radicale_proxy__users',
         )
+        configurator.add_view(
+            self.radicale_proxy__users,
+            route_name='radicale_proxy__users__leading_slash',
+        )
 
         # Radicale workspace calendar
         configurator.add_route(
             'radicale_proxy__workspace',
             '/radicale/workspace/{workspace_id:[0-9]+}.ics',
         )
+        configurator.add_route(
+            'radicale_proxy__workspace__leading_slash',
+            '/radicale/workspace/{workspace_id:[0-9]+}.ics/',
+        )
+        configurator.add_route(
+            'radicale_proxy__workspace_x',
+            '/radicale/workspace/{workspace_id:[0-9]+}.ics/{what_is_it_id:[a-zA-Z0-9]+}.ics',
+        )
+        configurator.add_route(
+            'radicale_proxy__workspace_x__leading_slash',
+            '/radicale/workspace/{workspace_id:[0-9]+}.ics/{what_is_it_id:[a-zA-Z0-9]+}.ics',
+        )
         configurator.add_view(
             self.radicale_proxy__workspace,
             route_name='radicale_proxy__workspace',
         )
+        configurator.add_view(
+            self.radicale_proxy__workspace,
+            route_name='radicale_proxy__workspace__leading_slash',
+        )
+        configurator.add_view(
+            self.radicale_proxy__workspace,
+            route_name='radicale_proxy__workspace_x',
+        )
+        configurator.add_view(
+            self.radicale_proxy__workspace,
+            route_name='radicale_proxy__workspace_x__leading_slash',
+        )
         configurator.add_route(
             'radicale_proxy__workspaces',
+            # FIXME BS 2018-12-13: Last "/" must be optional
+            '/radicale/workspace',
+        )
+        configurator.add_route(
+            'radicale_proxy__workspaces__leading_slash',
             # FIXME BS 2018-12-13: Last "/" must be optional
             '/radicale/workspace/',
         )
         configurator.add_view(
             self.radicale_proxy__workspaces,
             route_name='radicale_proxy__workspaces',
+        )
+        configurator.add_view(
+            self.radicale_proxy__workspaces,
+            route_name='radicale_proxy__workspaces__leading_slash',
         )

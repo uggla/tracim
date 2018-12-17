@@ -57,21 +57,29 @@ def add_cors_preflight_handler(config):
 
 def cors_options_view(context, request):
     response = request.response
-    # @TODO Côme - 2018/09/04 - I commented the test bellow because I can't work with for editing a file in app file.
-    # I checked with GM and this test might require some fixes
-    # if 'Access-Control-Request-Headers' in request.headers:
-    # response.headers['Access-Control-Allow-Methods'] = (
-    #     ','.join(
-    #         ['OPTIONS,HEAD,GET,POST,PUT,DELETE'] +
-    #         CALDAV_WRITE_METHODS +
-    #         CALDAV_READ_METHODS
-    #     )
-    # )
-    response.headers['Access-Control-Allow-Methods'] = (
-        'OPTIONS,HEAD,GET,POST,PUT,DELETE'
-    )
+
+    if 'Access-Control-Request-Headers' in request.headers:
+        response.headers['Access-Control-Allow-Methods'] = (
+            ','.join(
+                ['OPTIONS,HEAD,GET,POST,PUT,DELETE'] +
+                CALDAV_WRITE_METHODS +
+                CALDAV_READ_METHODS
+            )
+        )
+
+    # FIXME BS 2018-12-17
+    app_config = request.registry.settings['CFG']
+    if 'Origin' in request.headers and request.headers['Origin'] in app_config.CORS_ALLOWED_ORIGIN:
+        response.headers['Access-Control-Allow-Origin'] = request.headers['Origin']
+
     response.headers['Access-Control-Allow-Headers'] = (
-        'Content-Type,Accept,Accept-Language,Authorization,X-Request-ID'
+        'Content-Type,Date,Content-Length,Authorization,X-Request-ID,'
+        'User-Agent,Depth,If-match,If-None-Match,Lock-Token,Timeout,'
+        'Destination,Overwrite,X-client,X-Requested-With,Request,Authorization,'
+        'Prefer'
+    )
+    response.headers['Access-Control-Expose-Headers'] = (
+        'Content-Type,Date,Content-Length,Authorization,X-Request-ID,Etag'
     )
     return response
 
@@ -89,7 +97,13 @@ def add_cors_to_response(event):
 def get_cors_headers_to_add(origin: str) -> typing.Dict[str, str]:
     return {
         'Access-Control-Expose-Headers': (
-            'Content-Type,Date,Content-Length,Authorization,X-Request-ID'
+            'Content-Type,Date,Content-Length,Authorization,X-Request-ID,Etag'
+        ),
+        'Access-Control-Allow-Headers': (
+            'Content-Type,Date,Content-Length,Authorization,X-Request-ID,'
+            'User-Agent,Depth,If-match,If-None-Match,Lock-Token,Timeout,'
+            'Destination,Overwrite,X-client,X-Requested-With,Request,'
+            'Prefer'
         ),
         'Access-Control-Allow-Origin': origin,
         'Access-Control-Allow-Credentials': 'true',

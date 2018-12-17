@@ -1,7 +1,7 @@
 # coding: utf-8
 from enum import Enum
 
-from hapic.error import DefaultErrorBuilder
+from hapic.error.marshmallow import MarshmallowDefaultErrorBuilder
 from hapic.ext.pyramid import PyramidContext
 from pyramid.response import Response
 
@@ -28,7 +28,7 @@ class TracimPyramidContext(PyramidContext):
         return response
 
 
-class RadicaleProxyErrorBuilder(DefaultErrorBuilder):
+class RadicaleProxyErrorBuilder(MarshmallowDefaultErrorBuilder):
     def build_from_exception(
         self, exception: Exception, include_traceback: bool = False
     ) -> dict:

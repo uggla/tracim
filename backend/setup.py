@@ -24,7 +24,7 @@ requires = [
     'zope.sqlalchemy',
     'alembic',
     # API
-    'hapic[marshmallow]>=0.62',
+    'hapic[marshmallow]>=0.64',
     'marshmallow <3.0.0a1,>2.0.0',
     # CLI
     'cliff',
