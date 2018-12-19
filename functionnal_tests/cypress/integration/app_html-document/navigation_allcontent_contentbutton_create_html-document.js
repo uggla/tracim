@@ -7,12 +7,12 @@ describe('navigate :: workspace > create_new > html-document', function () {
   })
 
   beforeEach(function () {
-    cy.login('users')
+    cy.loginAs('users')
     cy.visit(WORKSPACE_URL)
   })
-  it('dashboard > button', function () {
+  it('Checks if creation popup opens and closes', function () {
     cy.get('.pageTitleGeneric__title__icon').should('be.visible')
-    cy.get('.workspace__content__button.dropdownCreateBtn .__label').should('be.visible').click()
+    cy.get('[data-cy=dropdownCreateBtn]').should('be.visible').click()
     cy.get('.show .subdropdown__link__html-document__icon').should('be.visible').click()
     const title = 'document1'
     cy.get('.cardPopup__container').should('be.visible')

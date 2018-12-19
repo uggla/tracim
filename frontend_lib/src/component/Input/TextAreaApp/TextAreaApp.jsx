@@ -2,8 +2,9 @@ import React from 'react'
 import PropTypes from 'prop-types'
 import { translate } from 'react-i18next'
 import Radium from 'radium'
+import color from 'color'
 
-require('./TextAreaApp.styl')
+// require('./TextAreaApp.styl') // see https://github.com/tracim/tracim/issues/1156
 
 export const TextAreaApp = props =>
   <form className={`${props.customClass} editionmode`}>
@@ -35,15 +36,16 @@ export const TextAreaApp = props =>
 
       <button
         type='button'
-        className={`${props.customClass}__submit editionmode__button__submit btn outlineTextBtn`}
+        data-cy='editionmode__button__submit'
+        className={`${props.customClass}__submit editionmode__button__submit btn highlightBtn`}
         onClick={props.onClickValidateBtn}
+        disabled={props.disableValidateBtn}
         style={{
-          backgroundColor: '#fdfdfd',
-          color: props.customColor,
+          backgroundColor: props.customColor,
+          color: '#fdfdfd',
           borderColor: props.customColor,
           ':hover': {
-            backgroundColor: props.customColor,
-            color: '#fdfdfd'
+            backgroundColor: color(props.customColor).darken(0.15).hexString()
           }
         }}
         key='TextAreaApp__validate'
@@ -60,6 +62,7 @@ TextAreaApp.propTypes = {
   onChangeText: PropTypes.func.isRequired,
   onClickCancelBtn: PropTypes.func.isRequired,
   onClickValidateBtn: PropTypes.func.isRequired,
+  disableValidateBtn: PropTypes.bool,
   id: PropTypes.string,
   customClass: PropTypes.string,
   customColor: PropTypes.string

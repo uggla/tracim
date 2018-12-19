@@ -5,14 +5,12 @@ describe('navigate :: workspace > create_new > thread', function () {
   })
 
   beforeEach(function () {
-    cy.login('users')
+    cy.loginAs('users')
     cy.visit('/ui/workspaces/1/contents')
   })
   it('content button', function () {
     cy.get('.pageTitleGeneric__title__icon').should('be.visible')
-    cy.get('.workspace__content__button.dropdownCreateBtn .__label').should('be.visible')
-    cy.get('.workspace__content__button.dropdownCreateBtn .__label').click()
-    cy.get('.show .subdropdown__link__thread__icon').should('be.visible')
+    cy.get('[data-cy=dropdownCreateBtn]').click()
     cy.get('.show .subdropdown__link__thread__icon').click()
     var titre1 = 'thread1'
     cy.get('.cardPopup__container').should('be.visible')

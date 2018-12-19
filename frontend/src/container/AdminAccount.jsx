@@ -1,6 +1,7 @@
 import React from 'react'
 import { connect } from 'react-redux'
 import { withRouter } from 'react-router-dom'
+import { translate } from 'react-i18next'
 import UserInfo from '../component/Account/UserInfo.jsx'
 import MenuSubComponent from '../component/Account/MenuSubComponent.jsx'
 import PersonalData from '../component/Account/PersonalData.jsx'
@@ -12,8 +13,7 @@ import {
   Delimiter,
   PageWrapper,
   PageTitle,
-  PageContent,
-  generateAvatarFromPublicName
+  PageContent
 } from 'tracim_frontend_lib'
 import {
   newFlashMessage
@@ -27,7 +27,7 @@ import {
   putUserPassword,
   putUserWorkspaceDoNotify
 } from '../action-creator.async.js'
-import { translate } from 'react-i18next'
+import { editableUserAuthTypeList } from '../helper.js'
 
 class Account extends React.Component {
   constructor (props) {
@@ -36,7 +36,7 @@ class Account extends React.Component {
     const builtSubComponentMenu = [{
       name: 'personalData',
       active: true,
-      label: props.t('My profile')
+      label: props.t('Profile')
     }, {
       name: 'notification',
       active: false,
@@ -57,7 +57,10 @@ class Account extends React.Component {
 
     this.state = {
       idUserToEdit: props.match.params.iduser,
-      userToEdit: {},
+      userToEdit: {
+        public_name: '',
+        auth_type: 'internal'
+      },
       userToEditWorkspaceList: [],
       subComponentMenu: builtSubComponentMenu
     }
@@ -75,12 +78,11 @@ class Account extends React.Component {
 
     switch (fetchGetUser.status) {
       case 200:
-        this.setState({
-          userToEdit: {
-            ...fetchGetUser.json,
-            avatar_url: fetchGetUser.json.avatar_url ? fetchGetUser.json.avatar_url : generateAvatarFromPublicName(fetchGetUser.json.public_name)
-          }
-        })
+        this.setState(prev => ({
+          userToEdit: fetchGetUser.json,
+          subComponentMenu: prev.subComponentMenu
+            .filter(menu => editableUserAuthTypeList.includes(fetchGetUser.json.auth_type) ? true : menu.name !== 'password')
+        }))
         break
       default: props.dispatch(newFlashMessage(props.t('Error while loading user')))
     }
@@ -131,6 +133,11 @@ class Account extends React.Component {
     const { props, state } = this
 
     if (newName !== '') {
+      if (newName.length < 3) {
+        props.dispatch(newFlashMessage(props.t('Full name must be at least 3 characters'), 'warning'))
+        return false
+      }
+
       const fetchPutUserName = await props.dispatch(putUserName(state.userToEdit, newName))
       switch (fetchPutUserName.status) {
         case 200:
@@ -191,35 +198,12 @@ class Account extends React.Component {
   render () {
     const { props, state } = this
 
-    const subComponent = (() => {
-      switch (state.subComponentMenu.find(({active}) => active).name) {
-        case 'personalData':
-          return <PersonalData onClickSubmit={this.handleSubmitNameOrEmail} displayAdminInfo />
-
-        // case 'calendar':
-        //   return <Calendar user={props.user} />
-
-        case 'notification':
-          return <Notification
-            idMyself={parseInt(state.idUserToEdit)}
-            workspaceList={state.userToEditWorkspaceList}
-            onChangeSubscriptionNotif={this.handleChangeSubscriptionNotif}
-          />
-
-        case 'password':
-          return <Password onClickSubmit={this.handleSubmitPassword} displayAdminInfo />
-
-        // case 'timezone':
-        //   return <Timezone timezone={props.timezone} onChangeTimezone={this.handleChangeTimezone} />
-      }
-    })()
-
     return (
       <div className='tracim__content fullWidthFullHeight'>
         <PageWrapper customClass='account'>
           <PageTitle
             parentClass={'account'}
-            title={props.t('Admin account page')}
+            title={props.t('{{userName}} account edition', {userName: state.userToEdit.public_name})}
             icon='user-o'
           />
 
@@ -235,7 +219,32 @@ class Account extends React.Component {
               />
 
               <div className='account__userpreference__setting'>
-                { subComponent }
+                {(() => {
+                  switch (state.subComponentMenu.find(({active}) => active).name) {
+                    case 'personalData':
+                      return <PersonalData
+                        userAuthType={state.userToEdit.auth_type}
+                        onClickSubmit={this.handleSubmitNameOrEmail}
+                        displayAdminInfo
+                      />
+
+                    // case 'calendar':
+                    //   return <Calendar user={props.user} />
+
+                    case 'notification':
+                      return <Notification
+                        idMyself={parseInt(state.idUserToEdit)}
+                        workspaceList={state.userToEditWorkspaceList}
+                        onChangeSubscriptionNotif={this.handleChangeSubscriptionNotif}
+                      />
+
+                    case 'password':
+                      return <Password onClickSubmit={this.handleSubmitPassword} displayAdminInfo />
+
+                    // case 'timezone':
+                    //   return <Timezone timezone={props.timezone} onChangeTimezone={this.handleChangeTimezone} />
+                  }
+                })()}
               </div>
             </div>
 

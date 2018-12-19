@@ -5,7 +5,6 @@ import i18n from '../i18n.js'
 import {
   addAllResourceI18n,
   handleFetchResult,
-  generateAvatarFromPublicName,
   PopinFixed,
   PopinFixedHeader,
   PopinFixedOption,
@@ -15,7 +14,8 @@ import {
   ArchiveDeleteContent,
   SelectStatus,
   displayDistanceDate,
-  convertBackslashNToBr
+  convertBackslashNToBr,
+  generateLocalStorageContentId
 } from 'tracim_frontend_lib'
 import { MODE, debug } from '../helper.js'
 import {
@@ -54,7 +54,7 @@ class HtmlDocument extends React.Component {
     }
 
     // i18n has been init, add resources from frontend
-    addAllResourceI18n(i18n, this.state.config.translation)
+    addAllResourceI18n(i18n, this.state.config.translation, this.state.loggedUser.lang)
     i18n.changeLanguage(this.state.loggedUser.lang)
 
     document.addEventListener('appCustomEvent', this.customEventReducer)
@@ -67,14 +67,29 @@ class HtmlDocument extends React.Component {
         console.log('%c<HtmlDocument> Custom event', 'color: #28a745', type, data)
         this.setState({isVisible: true})
         break
+
       case 'html-document_hideApp':
         console.log('%c<HtmlDocument> Custom event', 'color: #28a745', type, data)
-        this.setState({isVisible: false})
+        tinymce.remove('#wysiwygTimelineComment')
+        tinymce.remove('#wysiwygNewVersion')
+        this.setState({
+          isVisible: false,
+          timelineWysiwyg: false
+        })
         break
+
       case 'html-document_reloadContent':
         console.log('%c<HtmlDocument> Custom event', 'color: #28a745', type, data)
-        this.setState(prev => ({content: {...prev.content, ...data}, isVisible: true}))
+        tinymce.remove('#wysiwygTimelineComment')
+        tinymce.remove('#wysiwygNewVersion')
+
+        this.setState(prev => ({
+          content: {...prev.content, ...data},
+          isVisible: true,
+          timelineWysiwyg: false
+        }))
         break
+
       case 'allApp_changeLang':
         console.log('%c<HtmlDocument> Custom event', 'color: #28a745', type, data)
 
@@ -105,16 +120,20 @@ class HtmlDocument extends React.Component {
     this.loadContent()
   }
 
-  componentDidUpdate (prevProps, prevState) {
+  async componentDidUpdate (prevProps, prevState) {
     const { state } = this
 
     console.log('%c<HtmlDocument> did update', `color: ${this.state.config.hexcolor}`, prevState, state)
 
     if (!prevState.content || !state.content) return
 
-    if (prevState.content.content_id !== state.content.content_id) this.loadContent()
+    if (prevState.content.content_id !== state.content.content_id) {
+      await this.loadContent()
+      tinymce.remove('#wysiwygNewVersion')
+      wysiwyg('#wysiwygNewVersion', state.loggedUser.lang, this.handleChangeText)
+    }
 
-    if (state.mode === MODE.EDIT && prevState.mode !== state.mode) {
+    if (state.mode === MODE.EDIT && prevState.mode !== MODE.EDIT) {
       tinymce.remove('#wysiwygNewVersion')
       wysiwyg('#wysiwygNewVersion', state.loggedUser.lang, this.handleChangeText)
     }
@@ -125,6 +144,8 @@ class HtmlDocument extends React.Component {
 
   componentWillUnmount () {
     console.log('%c<HtmlDocument> will Unmount', `color: ${this.state.config.hexcolor}`)
+    tinymce.remove('#wysiwygNewVersion')
+    tinymce.remove('#wysiwygTimelineComment')
     document.removeEventListener('appCustomEvent', this.customEventReducer)
   }
 
@@ -137,67 +158,108 @@ class HtmlDocument extends React.Component {
     }
   })
 
+  isValidLocalStorageType = type => ['rawContent', 'comment'].includes(type)
+
+  getLocalStorageItem = type => {
+    if (!this.isValidLocalStorageType(type)) {
+      console.log('error in app htmldoc, wrong getLocalStorage type')
+      return
+    }
+
+    const { state } = this
+    return localStorage.getItem(
+      generateLocalStorageContentId(state.content.workspace_id, state.content.content_id, state.appName, type)
+    )
+  }
+
+  setLocalStorageItem = (type, value) => {
+    if (!this.isValidLocalStorageType(type)) {
+      console.log('error in app htmldoc, wrong setLocalStorage type')
+      return
+    }
+
+    const { state } = this
+    localStorage.setItem(
+      generateLocalStorageContentId(state.content.workspace_id, state.content.content_id, state.appName, type),
+      value
+    )
+  }
+
   loadContent = async () => {
-    const { loggedUser, content, config } = this.state
+    const { loggedUser, content, config, appName } = this.state
 
     const fetchResultHtmlDocument = getHtmlDocContent(config.apiUrl, content.workspace_id, content.content_id)
     const fetchResultComment = getHtmlDocComment(config.apiUrl, content.workspace_id, content.content_id)
     const fetchResultRevision = getHtmlDocRevision(config.apiUrl, content.workspace_id, content.content_id)
 
-    handleFetchResult(await fetchResultHtmlDocument)
-      .then(resHtmlDocument => this.setState({content: resHtmlDocument.body}))
-      .catch(e => console.log('Error loading content.', e))
-
-    Promise.all([
+    const [resHtmlDocument, resComment, resRevision] = await Promise.all([
+      handleFetchResult(await fetchResultHtmlDocument),
       handleFetchResult(await fetchResultComment),
       handleFetchResult(await fetchResultRevision)
     ])
-      .then(([resComment, resRevision]) => {
-        const resCommentWithProperDateAndAvatar = resComment.body.map(c => ({
-          ...c,
-          created_raw: c.created,
-          created: displayDistanceDate(c.created, loggedUser.lang),
-          author: {
-            ...c.author,
-            avatar_url: c.author.avatar_url
-              ? c.author.avatar_url
-              : generateAvatarFromPublicName(c.author.public_name)
-          }
+
+    const resCommentWithProperDate = resComment.body.map(c => ({
+      ...c,
+      created_raw: c.created,
+      created: displayDistanceDate(c.created, loggedUser.lang)
+    }))
+
+    const revisionWithComment = resRevision.body
+      .map((r, i) => ({
+        ...r,
+        created_raw: r.created,
+        created: displayDistanceDate(r.created, loggedUser.lang),
+        timelineType: 'revision',
+        commentList: r.comment_ids.map(ci => ({
+          timelineType: 'comment',
+          ...resCommentWithProperDate.find(c => c.content_id === ci)
+        })),
+        number: i + 1
+      }))
+      .reduce((acc, rev) => [
+        ...acc,
+        rev,
+        ...rev.commentList.map(comment => ({
+          ...comment,
+          customClass: '',
+          loggedUser: this.state.config.loggedUser
         }))
+      ], [])
 
-        const revisionWithComment = resRevision.body
-          .map((r, i) => ({
-            ...r,
-            created_raw: r.created,
-            created: displayDistanceDate(r.created, loggedUser.lang),
-            timelineType: 'revision',
-            commentList: r.comment_ids.map(ci => ({
-              timelineType: 'comment',
-              ...resCommentWithProperDateAndAvatar.find(c => c.content_id === ci)
-            })),
-            number: i + 1
-          }))
-          .reduce((acc, rev) => [
-            ...acc,
-            rev,
-            ...rev.commentList.map(comment => ({
-              ...comment,
-              customClass: '',
-              loggedUser: this.state.config.loggedUser
-            }))
-          ], [])
+    const localStorageComment = localStorage.getItem(
+      generateLocalStorageContentId(resHtmlDocument.body.workspace_id, resHtmlDocument.body.content_id, appName, 'comment')
+    )
 
-        this.setState({
-          timeline: revisionWithComment,
-          mode: resRevision.body.length === 1 && loggedUser.idRoleUserWorkspace >= 2 ? MODE.EDIT : MODE.VIEW // first time editing the doc, open in edit mode
-        })
-      })
-      .catch(e => {
-        console.log('Error loading Timeline.', e)
-        this.setState({timeline: []})
-      })
+    // first time editing the doc, open in edit mode, unless it has been created with webdav or db imported from tracim v1
+    // see https://github.com/tracim/tracim/issues/1206
+    // @fixme Côme - 2018/12/04 - this might not be a great idea
+    const modeToRender = (
+      resRevision.body.length === 1 && // if content has only one revision
+      loggedUser.idRoleUserWorkspace >= 2 && // if user has EDIT authorization
+      resRevision.body[0].raw_content === '' // has content been created with raw_content (means it's from webdav or import db)
+    )
+      ? MODE.EDIT
+      : MODE.VIEW
 
-    await Promise.all([fetchResultHtmlDocument, fetchResultComment, fetchResultRevision])
+    // can't use this.getLocalStorageItem because it uses state that isn't yet initialized
+    const localStorageRawContent = localStorage.getItem(
+      generateLocalStorageContentId(resHtmlDocument.body.workspace_id, resHtmlDocument.body.content_id, appName, 'rawContent')
+    )
+    const hasLocalStorageRawContent = !!localStorageRawContent
+
+    this.setState({
+      mode: modeToRender,
+      content: {
+        ...resHtmlDocument.body,
+        raw_content: modeToRender === MODE.EDIT && hasLocalStorageRawContent
+          ? localStorageRawContent
+          : resHtmlDocument.body.raw_content
+      },
+      newComment: localStorageComment || '',
+      rawContentBeforeEdit: resHtmlDocument.body.raw_content,
+      timeline: revisionWithComment
+    })
+
     await putHtmlDocRead(loggedUser, config.apiUrl, content.workspace_id, content.content_id) // mark as read after all requests are finished
     GLOBAL_dispatchEvent({type: 'refreshContentList', data: {}}) // await above makes sure that we will reload workspace content after the read status update
   }
@@ -223,13 +285,23 @@ class HtmlDocument extends React.Component {
       })
   }
 
-  handleClickNewVersion = () => this.setState(prev => ({
-    rawContentBeforeEdit: prev.content.raw_content,
-    mode: MODE.EDIT
-  }))
+  handleClickNewVersion = () => {
+    const previouslyUnsavedRawContent = this.getLocalStorageItem('rawContent')
+    console.log('handleClickNewVersion(), previouslyUnsavedRawContent', previouslyUnsavedRawContent)
+
+    this.setState(prev => ({
+      content: {
+        ...prev.content,
+        raw_content: previouslyUnsavedRawContent || prev.content.raw_content
+      },
+      rawContentBeforeEdit: prev.content.raw_content, // for cancel btn
+      mode: MODE.EDIT
+    }))
+  }
 
   handleCloseNewVersion = () => {
     tinymce.remove('#wysiwygNewVersion')
+
     this.setState(prev => ({
       content: {
         ...prev.content,
@@ -237,10 +309,15 @@ class HtmlDocument extends React.Component {
       },
       mode: MODE.VIEW
     }))
+
+    const { appName, content } = this.state
+    localStorage.removeItem(
+      generateLocalStorageContentId(content.workspace_id, content.content_id, appName, 'rawContent')
+    )
   }
 
   handleSaveHtmlDocument = async () => {
-    const { content, config } = this.state
+    const { appName, content, config } = this.state
 
     const fetchResultSaveHtmlDoc = putHtmlDocContent(config.apiUrl, content.workspace_id, content.content_id, content.label, content.raw_content)
 
@@ -249,6 +326,9 @@ class HtmlDocument extends React.Component {
         if (resSave.apiResponse.status === 200) {
           this.handleCloseNewVersion()
           this.loadContent()
+          localStorage.removeItem(
+            generateLocalStorageContentId(content.workspace_id, content.content_id, appName, 'rawContent')
+          )
         } else {
           console.warn('Error saving html-document. Result:', resSave, 'content:', content, 'config:', config)
         }
@@ -258,11 +338,15 @@ class HtmlDocument extends React.Component {
   handleChangeText = e => {
     const newText = e.target.value // because SyntheticEvent is pooled (react specificity)
     this.setState(prev => ({content: {...prev.content, raw_content: newText}}))
+
+    this.setLocalStorageItem('rawContent', newText)
   }
 
   handleChangeNewComment = e => {
     const newComment = e.target.value
     this.setState({newComment})
+
+    this.setLocalStorageItem('comment', newComment)
   }
 
   handleClickValidateNewCommentBtn = async () => {
@@ -278,6 +362,9 @@ class HtmlDocument extends React.Component {
     switch (fetchResultSaveNewComment.apiResponse.status) {
       case 200:
         this.setState({newComment: ''})
+        localStorage.removeItem(
+          generateLocalStorageContentId(state.content.workspace_id, state.content.content_id, state.appName, 'comment')
+        )
         if (state.timelineWysiwyg) tinymce.get('wysiwygTimelineComment').setContent('')
         this.loadContent()
         break
@@ -415,7 +502,7 @@ class HtmlDocument extends React.Component {
   }
 
   render () {
-    const { isVisible, loggedUser, content, timeline, newComment, timelineWysiwyg, config, mode } = this.state
+    const { isVisible, loggedUser, content, timeline, newComment, timelineWysiwyg, config, mode, rawContentBeforeEdit } = this.state
     const { t } = this.props
 
     if (!isVisible) return null
@@ -429,7 +516,8 @@ class HtmlDocument extends React.Component {
           customClass={`${config.slug}`}
           customColor={config.hexcolor}
           faIcon={config.faIcon}
-          title={content.label}
+          rawTitle={content.label}
+          componentTitle={<div>{content.label}</div>}
           idRoleUserWorkspace={loggedUser.idRoleUserWorkspace}
           onClickCloseBtn={this.handleClickBtnCloseApp}
           onValidateChangeTitle={this.handleSaveEditTitle}
@@ -495,6 +583,7 @@ class HtmlDocument extends React.Component {
             customColor={config.hexcolor}
             wysiwygNewVersion={'wysiwygNewVersion'}
             onClickCloseEditMode={this.handleCloseNewVersion}
+            disableValidateBtn={rawContentBeforeEdit === content.raw_content}
             onClickValidateBtn={this.handleSaveHtmlDocument}
             version={content.number}
             lastVersion={timeline.filter(t => t.timelineType === 'revision').length}

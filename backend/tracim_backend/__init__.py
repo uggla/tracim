@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 from pyramid_multiauth import MultiAuthenticationPolicy
+
+from tracim_backend.models.auth import AuthType
 from tracim_backend.views.core_api.account_controller import AccountController
 
 try:  # Python 3.5+
@@ -15,6 +17,8 @@ from tracim_backend.extensions import hapic
 from tracim_backend.config import CFG
 from tracim_backend.lib.utils.request import TracimRequest
 from tracim_backend.lib.utils.authentification import CookieSessionAuthentificationPolicy
+from tracim_backend.lib.utils.authentification import RemoteAuthentificationPolicy
+from tracim_backend.lib.utils.authentification import RemoteAuthentificationPolicy
 from tracim_backend.lib.utils.authentification import TracimBasicAuthAuthenticationPolicy
 from tracim_backend.lib.utils.authentification import ApiTokenAuthentificationPolicy
 from tracim_backend.lib.utils.authentification import TRACIM_API_KEY_HEADER
@@ -30,6 +34,7 @@ from tracim_backend.views.contents_api.threads_controller import ThreadControlle
 from tracim_backend.views.core_api.session_controller import SessionController
 from tracim_backend.views.core_api.system_controller import SystemController
 from tracim_backend.views.core_api.user_controller import UserController
+from tracim_backend.views.core_api.account_controller import AccountController
 from tracim_backend.views.core_api.workspace_controller import WorkspaceController  # nopep8
 from tracim_backend.views.contents_api.comment_controller import CommentController  # nopep8
 from tracim_backend.views.contents_api.file_controller import FileController
@@ -38,6 +43,7 @@ from tracim_backend.views.core_api.reset_password_controller import ResetPasswor
 from tracim_backend.views.frontend import FrontendController
 from tracim_backend.views.errors import ErrorSchema
 from tracim_backend.exceptions import NotAuthenticated
+from tracim_backend.exceptions import ContentTypeNotExist
 from tracim_backend.exceptions import SameValueError
 from tracim_backend.exceptions import ContentInNotEditableState
 from tracim_backend.exceptions import PageNotFound
@@ -68,17 +74,50 @@ def web(global_config, **local_settings):
     # Add AuthPolicy
     configurator.include("pyramid_beaker")
     configurator.include("pyramid_multiauth")
-    policies = [
+    policies = []
+    if app_config.REMOTE_USER_HEADER:
+        policies.append(
+            RemoteAuthentificationPolicy(
+                remote_user_email_login_header=app_config.REMOTE_USER_HEADER,
+            )
+        )
+    policies.append(
         CookieSessionAuthentificationPolicy(
             reissue_time=app_config.SESSION_REISSUE_TIME),  # nopep8
-        ApiTokenAuthentificationPolicy(
-            api_key_header=TRACIM_API_KEY_HEADER,
-            api_user_email_login_header=TRACIM_API_USER_EMAIL_LOGIN_HEADER
-        ),
+    )
+    if app_config.API_KEY:
+        policies.append(
+            ApiTokenAuthentificationPolicy(
+                api_key_header=TRACIM_API_KEY_HEADER,
+                api_user_email_login_header=TRACIM_API_USER_EMAIL_LOGIN_HEADER
+            ),
+        )
+    policies.append(
         TracimBasicAuthAuthenticationPolicy(
             realm=BASIC_AUTH_WEBUI_REALM
         ),
-    ]
+    )
+    # Hack for ldap
+    if AuthType.LDAP in app_config.AUTH_TYPES:
+        import ldap3
+        configurator.include('pyramid_ldap3')
+        configurator.ldap_setup(
+            app_config.LDAP_URL,
+            bind=app_config.LDAP_BIND_DN,
+            passwd=app_config.LDAP_BIND_PASS,
+            use_tls=app_config.LDAP_TLS,
+            use_pool=app_config.LDAP_USE_POOL,
+            pool_size=app_config.LDAP_POOL_SIZE,
+            pool_lifetime=app_config.LDAP_POOL_LIFETIME,
+            get_info=app_config.LDAP_GET_INFO
+        )
+        configurator.ldap_set_login_query(
+            base_dn=app_config.LDAP_USER_BASE_DN,
+            filter_tmpl=app_config.LDAP_USER_FILTER,
+            scope=ldap3.LEVEL,
+            attributes=ldap3.ALL_ATTRIBUTES
+        )
+
     configurator.include(add_cors_support)
     # make sure to add this before other routes to intercept OPTIONS
     configurator.add_cors_preflight_handler()
@@ -95,7 +134,7 @@ def web(global_config, **local_settings):
     # Pyramids "plugin" include.
     configurator.include('pyramid_jinja2')
     # Add SqlAlchemy DB
-    configurator.include('.models')
+    configurator.include('.models.setup_models')
     # set Hapic
     context = PyramidContext(
         configurator=configurator,
@@ -113,6 +152,7 @@ def web(global_config, **local_settings):
     context.handle_exception(WorkspaceNotFound, HTTPStatus.BAD_REQUEST)
     context.handle_exception(UserDoesNotExist, HTTPStatus.BAD_REQUEST)
     context.handle_exception(ContentNotFound, HTTPStatus.BAD_REQUEST)
+    context.handle_exception(ContentTypeNotExist, HTTPStatus.BAD_REQUEST)
     context.handle_exception(ContentInNotEditableState, HTTPStatus.BAD_REQUEST)
     context.handle_exception(ContentTypeNotAllowed, HTTPStatus.BAD_REQUEST)
     context.handle_exception(InvalidId, HTTPStatus.BAD_REQUEST)
@@ -167,6 +207,6 @@ def webdav(global_config, **local_settings):
     settings = global_config
     settings.update(local_settings)
     app_factory = WebdavAppFactory(
-        tracim_config_file_path=settings['__file__'],
+        **settings
     )
     return app_factory.get_wsgi_app()

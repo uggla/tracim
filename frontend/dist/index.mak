@@ -5,6 +5,7 @@
     <meta name='viewport' content='width=device-width, user-scalable=no'>
     <title>Tracim</title>
     <link rel='shortcut icon' type='image/x-icon' href='/assets/favicon.ico' >
+    <link rel='manifest' href='/assets/manifest.json'>
 
     <link rel='stylesheet' type='text/css' href='/assets/font/font-awesome-4.7.0/css/font-awesome.css'>
     <link rel='stylesheet' type='text/css' href='/assets/bootstrap/bootstrap-4.0.0-beta.css'>
@@ -78,8 +79,8 @@
     <script type='text/javascript' src='/assets/tracim/appInterface.js'></script>
     <script type='text/javascript' src='/assets/tracim/tinymceInit.js'></script>
 
-    <script type='text/javascript' src='/assets/tracim.vendor.bundle.js'></script>
-    <script type='text/javascript' src='/assets/tracim.app.entry.js'></script>
+    <script type='text/javascript' src='/assets/tracim.vendors~app.js'></script>
+    <script type='text/javascript' src='/assets/tracim.app.js'></script>
 
     <script type='text/javascript' src='/app/workspace.app.js'></script>
     % for app in applications:

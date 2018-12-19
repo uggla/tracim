@@ -1,9 +1,10 @@
 import React from 'react'
 import PropTypes from 'prop-types'
 import Radium from 'radium'
+import color from 'color'
 import CardPopup from './CardPopup.jsx'
 
-require('./CardPopupCreateContent.styl')
+// require('./CardPopupCreateContent.styl') // see https://github.com/tracim/tracim/issues/1156
 
 class PopupCreateContent extends React.Component {
   handleInputKeyDown = e => {
@@ -40,13 +41,14 @@ class PopupCreateContent extends React.Component {
               </div>
             </div>
 
-            <form className='createcontent__form'>
+            <form className='createcontent__form' data-cy='createcontent__form'>
               {props.children
                 ? props.children
                 : (
                   <input
                     type='text'
                     className='createcontent__form__input'
+                    data-cy='createcontent__form__input'
                     placeholder={props.inputPlaceholder}
                     value={props.contentName}
                     onChange={props.onChangeContentName}
@@ -58,15 +60,15 @@ class PopupCreateContent extends React.Component {
               <div className='createcontent__form__button'>
                 <button
                   type='button' // do neither remove this nor set it to 'submit' otherwise clicking the btn will submit the form and reload the page
-                  className='createcontent__form__button btn btn-primary'
+                  className='createcontent__form__button btn highlightBtn'
+                  data-cy='createcontent__form__button'
                   onClick={props.onValidate}
                   style={{
-                    backgroundColor: '#fdfdfd',
-                    color: props.customColor,
+                    backgroundColor: props.customColor,
+                    color: '#fdfdfd',
                     borderColor: props.customColor,
                     ':hover': {
-                      backgroundColor: props.customColor,
-                      color: '#fdfdfd'
+                      backgroundColor: color(props.customColor).darken(0.15).hexString()
                     }
                   }}
                   disabled={!props.contentName || props.contentName.length === 0}

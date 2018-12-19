@@ -7,13 +7,12 @@ import {
   USER_NAME,
   USER_EMAIL
 } from '../action-creator.sync.js'
-import { generateAvatarFromPublicName } from 'tracim_frontend_lib'
 import { getBrowserLang } from '../helper.js'
 
 const defaultUser = {
   user_id: -1,
   logged: null, // null avoid to be redirected to /login while whoami ep has not responded yet
-  auth: '',
+  auth_type: '',
   timezone: '',
   profile: {
     id: 1,
@@ -34,10 +33,7 @@ export default function user (state = defaultUser, action) {
       return {
         ...state,
         ...action.user,
-        lang: action.user.lang ? action.user.lang : state.lang,
-        avatar_url: action.user.avatar_url
-          ? action.user.avatar_url
-          : action.user.public_name ? generateAvatarFromPublicName(action.user.public_name) : ''
+        lang: action.user.lang ? action.user.lang : state.lang
       }
 
     case `${SET}/${USER_DISCONNECTED}`:

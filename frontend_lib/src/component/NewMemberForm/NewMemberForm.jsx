@@ -1,8 +1,8 @@
 import React from 'react'
 import { translate } from 'react-i18next'
-import { generateAvatarFromPublicName } from '../../index.js'
+import Avatar from '../Avatar/Avatar.jsx'
 
-require('./NewMemberForm.styl')
+// require('./NewMemberForm.styl') // see https://github.com/tracim/tracim/issues/1156
 
 export const NewMemberForm = props => {
   const radioHash = Math.random().toString(36).substring(7)
@@ -24,7 +24,8 @@ export const NewMemberForm = props => {
             type='text'
             className='name__input form-control'
             id='addmember'
-            placeholder={props.t('Name or email')}
+            placeholder={props.t('Full name or email')}
+            data-cy='addmember'
             value={props.nameOrEmail}
             onChange={e => props.onChangeNameOrEmail(e.target.value)}
             autoComplete='off'
@@ -41,10 +42,10 @@ export const NewMemberForm = props => {
                     key={u.user_id}
                   >
                     <div className='autocomplete__item__avatar'>
-                      <img src={u.avatar_url ? u.avatar_url : generateAvatarFromPublicName(u.public_name)} />
+                      <Avatar publicName={u.public_name} width={'44px'} />
                     </div>
 
-                    <div className='autocomplete__item__name'>
+                    <div className='autocomplete__item__name' data-cy='autocomplete__item__name'>
                       {u.public_name}
                     </div>
                   </div>
@@ -59,7 +60,7 @@ export const NewMemberForm = props => {
                         <i className='fa fa-fw fa-user-plus' />
                       </div>
 
-                      <div className='autocomplete__item__name'>
+                      <div className='autocomplete__item__name' data-cy='autocomplete__item__name'>
                         {props.t('Send an invitational email to this user')}
                       </div>
                     </div>
@@ -73,7 +74,7 @@ export const NewMemberForm = props => {
                         <i className='fa fa-fw fa-user-secret' />
                       </div>
 
-                      <div className='autocomplete__item__name'>
+                      <div className='autocomplete__item__name' data-cy='autocomplete__item__name'>
                         <div className='autocomplete__item__name__unknownuser'>
                           {props.nameOrEmail}
                           <div className='autocomplete__item__name__unknownuser__msg'>

@@ -24,10 +24,11 @@ export const MenuSubComponent = props => {
         {props.menu.map(menu =>
           <li
             className={classnames('menusubcomponent__list__item nav-item', {'active primaryColorBgLighten': menu.name === activeSubMenu})}
+            data-cy={`menusubcomponent__list__${menu.name}`}
             onClick={() => props.onClickMenuItem(menu.name)}
             key={menu.name}
           >
-            <div className='menusubcomponent__list__item__link nav-link'>{menu.label}</div>
+            <div className='menusubcomponent__list__item__link nav-link'>{props.t(menu.label)}</div>
           </li>
         )}
       </ul>
