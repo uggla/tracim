@@ -60,7 +60,7 @@ class EmailSender(object):
 
     def connect(self):
         if not self._smtp_connection:
-            log = 'Connecting from SMTP server {}'
+            log = 'Connecting to SMTP server {}'
             logger.info(self, log.format(self._smtp_config.server))
             self._smtp_connection = smtplib.SMTP(
                 self._smtp_config.server,
